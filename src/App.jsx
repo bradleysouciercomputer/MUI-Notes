@@ -134,16 +134,6 @@ function truncateText(value, maxLength = 180) {
   return text.slice(0, maxLength).trimEnd() + '…';
 }
 
-function NavigationItem({ value, selected, count, icon, label, onSelect }) {
-  return (
-    <ListItemButton selected={selected} onClick={() => onSelect(value)}>
-      <ListItemIcon>{icon}</ListItemIcon>
-      <ListItemText primary={label} />
-      <Chip size="small" label={count} />
-    </ListItemButton>
-  );
-}
-
 function App() {
   const [notes, setNotes] = useState(readNotes);
   const [filter, setFilter] = useState('all');
@@ -267,6 +257,7 @@ function App() {
     const file = event.target.files?.[0];
     if (!file) return;
     setImportFile(file);
+    event.target.value = '';
   };
 
   const confirmImport = () => {
@@ -340,10 +331,26 @@ function App() {
                 <Typography variant="h6">Notes</Typography>
                 <Paper variant="outlined">
                   <List disablePadding>
-                    <NavigationItem value="all" selected={filter === 'all'} count={counts.all} icon={<AllInboxRounded />} label="All notes" onSelect={setFilter} />
-                    <NavigationItem value="favorites" selected={filter === 'favorites'} count={counts.favorites} icon={<FavoriteBorderRounded />} label="Favorites" onSelect={setFilter} />
-                    <NavigationItem value="archived" selected={filter === 'archived'} count={counts.archived} icon={<Inventory2Outlined />} label="Archived" onSelect={setFilter} />
-                    <NavigationItem value="trash" selected={filter === 'trash'} count={counts.trash} icon={<DeleteOutlineRounded />} label="Trash" onSelect={setFilter} />
+                    <ListItemButton selected={filter === 'all'} onClick={() => setFilter('all')}>
+                      <ListItemIcon><AllInboxRounded /></ListItemIcon>
+                      <ListItemText primary="All notes" />
+                      <Chip size="small" label={counts.all} />
+                    </ListItemButton>
+                    <ListItemButton selected={filter === 'favorites'} onClick={() => setFilter('favorites')}>
+                      <ListItemIcon><FavoriteBorderRounded /></ListItemIcon>
+                      <ListItemText primary="Favorites" />
+                      <Chip size="small" label={counts.favorites} />
+                    </ListItemButton>
+                    <ListItemButton selected={filter === 'archived'} onClick={() => setFilter('archived')}>
+                      <ListItemIcon><Inventory2Outlined /></ListItemIcon>
+                      <ListItemText primary="Archived" />
+                      <Chip size="small" label={counts.archived} />
+                    </ListItemButton>
+                    <ListItemButton selected={filter === 'trash'} onClick={() => setFilter('trash')}>
+                      <ListItemIcon><DeleteOutlineRounded /></ListItemIcon>
+                      <ListItemText primary="Trash" />
+                      <Chip size="small" label={counts.trash} />
+                    </ListItemButton>
                   </List>
                 </Paper>
                 <Divider />
