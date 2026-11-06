@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Alert,
   AppBar,
@@ -24,6 +24,7 @@ import {
   ListItemButton,
   ListItemIcon,
   ListItemText,
+  Menu,
   MenuItem,
   Paper,
   Select,
@@ -41,6 +42,7 @@ import AllInboxRounded from '@mui/icons-material/AllInboxRounded';
 import ArchiveOutlined from '@mui/icons-material/ArchiveOutlined';
 import DeleteOutlineRounded from '@mui/icons-material/DeleteOutlineRounded';
 import DownloadRounded from '@mui/icons-material/DownloadRounded';
+import ContentCopyRounded from '@mui/icons-material/ContentCopyRounded';
 import FavoriteRounded from '@mui/icons-material/FavoriteRounded';
 import FavoriteBorderRounded from '@mui/icons-material/FavoriteBorderRounded';
 import LightModeRounded from '@mui/icons-material/LightModeRounded';
@@ -134,6 +136,11 @@ function truncateText(value, maxLength = 180) {
   return text.slice(0, maxLength).trimEnd() + '…';
 }
 
+function parseTags(value) {
+  const entries = Array.isArray(value) ? value : String(value || '').split(',');
+  return [...new Set(entries.map((tag) => String(tag).trim()).filter(Boolean))].slice(0, 12);
+}
+
 function App() {
   const [notes, setNotes] = useState(readNotes);
   const [filter, setFilter] = useState('all');
@@ -143,6 +150,10 @@ function App() {
   const [snackbar, setSnackbar] = useState('');
   const [deleteId, setDeleteId] = useState(null);
   const [importFile, setImportFile] = useState(null);
+  const [sortBy, setSortBy] = useState('updated');
+  const [selectedTag, setSelectedTag] = useState('');
+  const [templateAnchor, setTemplateAnchor] = useState(null);
+  const searchInputRef = useRef(null);
 
   const theme = useMemo(() => createTheme({ palette: { mode } }), [mode]);
 
@@ -163,6 +174,14 @@ function App() {
   }, [mode]);
 
   const activeNote = notes.find((note) => note.id === activeId) || null;
+  const wordCount = activeNote?.body.trim() ? activeNote.body.trim().split(/\\s+/).length : 0;
+  const characterCount = activeNote?.body.length ?? 0;
+  const readingMinutes = Math.max(1, Math.ceil(wordCount / 200));
+
+  const allTags = useMemo(
+    () => [...new Set(notes.flatMap((note) => parseTags(note.tags)))].sort((a, b) => a.localeCompare(b)),
+    [notes],
+  );
 
   const counts = useMemo(() => ({
     all: notes.filter((note) => !note.archived && !note.trashed).length,
@@ -179,11 +198,21 @@ function App() {
         if (filter === 'archived' && (!note.archived || note.trashed)) return false;
         if (filter === 'trash' && !note.trashed) return false;
         if (filter === 'all' && (note.archived || note.trashed)) return false;
+        if (selectedTag && !parseTags(note.tags).includes(selectedTag)) return false;
         if (!term) return true;
-        return [note.title, note.body, note.category].some((value) => String(value || '').toLowerCase().includes(term));
+        return [note.title, note.body, note.category, ...parseTags(note.tags)]
+          .some((value) => String(value || '').toLowerCase().includes(term));
       })
-      .sort((a, b) => Number(Boolean(b.pinned)) - Number(Boolean(a.pinned)) || new Date(b.updatedAt) - new Date(a.updatedAt));
-  }, [notes, filter, search]);
+      .sort((a, b) => {
+        const pinnedOrder = Number(Boolean(b.pinned)) - Number(Boolean(a.pinned));
+        if (pinnedOrder) return pinnedOrder;
+        if (sortBy === 'title-asc') return String(a.title || '').localeCompare(String(b.title || ''));
+        if (sortBy === 'title-desc') return String(b.title || '').localeCompare(String(a.title || ''));
+        if (sortBy === 'oldest') return new Date(a.updatedAt) - new Date(b.updatedAt);
+        if (sortBy === 'created') return new Date(b.createdAt) - new Date(a.createdAt);
+        return new Date(b.updatedAt) - new Date(a.updatedAt);
+      });
+  }, [notes, filter, search, selectedTag, sortBy]);
 
   const updateNote = (id, changes) => {
     setNotes((current) => current.map((note) => (
@@ -193,13 +222,36 @@ function App() {
     )));
   };
 
-  const createNote = () => {
+  const createNote = (template = 'blank') => {
+    const templates = {
+      blank: { title: '', body: '', category: 'Personal' },
+      meeting: {
+        title: 'Meeting notes',
+        body: 'Date:\\nAttendees:\\n\\nAgenda\\n\\nDiscussion notes\\n\\nAction items\\n- ',
+        category: 'Work',
+      },
+      tasks: {
+        title: 'To-do list',
+        body: 'Tasks\\n\\n☐ First task\\n☐ Second task\\n☐ Third task\\n\\nNotes\\n',
+        category: 'Personal',
+      },
+      journal: {
+        title: 'Journal entry',
+        body: 'Date:\\n\\nToday I…\\n\\nWhat went well?\\n\\nWhat I want to remember:\\n',
+        category: 'Journal',
+      },
+      project: {
+        title: 'Project plan',
+        body: 'Goal\\n\\nMilestones\\n1. \\n2. \\n3. \\n\\nResources\\n\\nNext steps\\n',
+        category: 'Work',
+      },
+    };
+    const preset = templates[template] || templates.blank;
     const now = new Date().toISOString();
     const note = {
       id: createId(),
-      title: '',
-      body: '',
-      category: 'Personal',
+      ...preset,
+      tags: '',
       favorite: false,
       pinned: false,
       archived: false,
@@ -209,8 +261,31 @@ function App() {
     };
     setNotes((current) => [note, ...current]);
     setFilter('all');
+    setSelectedTag('');
     setSearch('');
+    setTemplateAnchor(null);
     setActiveId(note.id);
+  };
+
+  const duplicateNote = (source) => {
+    const now = new Date().toISOString();
+    const copy = {
+      ...source,
+      id: createId(),
+      title: (source.title.trim() || 'Untitled note') + ' (copy)',
+      favorite: false,
+      pinned: false,
+      archived: false,
+      trashed: false,
+      createdAt: now,
+      updatedAt: now,
+    };
+    setNotes((current) => [copy, ...current]);
+    setFilter('all');
+    setSelectedTag('');
+    setSearch('');
+    setActiveId(copy.id);
+    setSnackbar('Note duplicated');
   };
 
   const moveToTrash = (id) => {
@@ -273,7 +348,8 @@ function App() {
           id: item.id,
           title: String(item.title || ''),
           body: String(item.body || ''),
-          category: CATEGORIES.includes(item.category) ? item.category : 'Personal',
+          category: String(item.category || 'Personal'),
+          tags: Array.isArray(item.tags) ? item.tags.join(', ') : String(item.tags || ''),
           favorite: Boolean(item.favorite),
           pinned: Boolean(item.pinned),
           archived: Boolean(item.archived),
@@ -303,6 +379,22 @@ function App() {
 
   const handleCloseEditor = () => setActiveId(null);
 
+  useEffect(() => {
+    const handleShortcut = (event) => {
+      if (!(event.ctrlKey || event.metaKey) || event.altKey) return;
+      const key = event.key.toLowerCase();
+      if (key === 'n') {
+        event.preventDefault();
+        createNote('blank');
+      } else if (key === 'f') {
+        event.preventDefault();
+        searchInputRef.current?.focus();
+      }
+    };
+    window.addEventListener('keydown', handleShortcut);
+    return () => window.removeEventListener('keydown', handleShortcut);
+  }, []);
+
   return (
     <ThemeProvider theme={theme}>
       <CssBaseline />
@@ -316,12 +408,24 @@ function App() {
                 {mode === 'light' ? <DarkModeRounded /> : <LightModeRounded />}
               </IconButton>
             </Tooltip>
-            <Button color="inherit" startIcon={<AddRounded />} onClick={createNote}>
+            <Button color="inherit" startIcon={<AddRounded />} onClick={(event) => setTemplateAnchor(event.currentTarget)}>
               New note
             </Button>
           </Stack>
         </Toolbar>
       </AppBar>
+
+      <Menu
+        anchorEl={templateAnchor}
+        open={Boolean(templateAnchor)}
+        onClose={() => setTemplateAnchor(null)}
+      >
+        <MenuItem onClick={() => createNote('blank')}>Blank note</MenuItem>
+        <MenuItem onClick={() => createNote('meeting')}>Meeting notes</MenuItem>
+        <MenuItem onClick={() => createNote('tasks')}>To-do list</MenuItem>
+        <MenuItem onClick={() => createNote('journal')}>Journal entry</MenuItem>
+        <MenuItem onClick={() => createNote('project')}>Project plan</MenuItem>
+      </Menu>
 
       <Container maxWidth="xl">
         <Stack spacing={3} direction="column">
@@ -376,17 +480,51 @@ function App() {
                 <Stack spacing={2}>
                   <Typography variant="h4" component="h2">{pageTitle}</Typography>
                   <TextField
+                    inputRef={searchInputRef}
                     fullWidth
                     label="Search notes"
                     value={search}
                     onChange={(event) => setSearch(event.target.value)}
                   />
+                  <Grid container spacing={2}>
+                    <Grid size={{ xs: 12, sm: 6 }}>
+                      <FormControl fullWidth size="small">
+                        <InputLabel id="sort-notes-label">Sort by</InputLabel>
+                        <Select
+                          labelId="sort-notes-label"
+                          label="Sort by"
+                          value={sortBy}
+                          onChange={(event) => setSortBy(event.target.value)}
+                        >
+                          <MenuItem value="updated">Recently updated</MenuItem>
+                          <MenuItem value="created">Recently created</MenuItem>
+                          <MenuItem value="oldest">Oldest updated</MenuItem>
+                          <MenuItem value="title-asc">Title A–Z</MenuItem>
+                          <MenuItem value="title-desc">Title Z–A</MenuItem>
+                        </Select>
+                      </FormControl>
+                    </Grid>
+                    <Grid size={{ xs: 12, sm: 6 }}>
+                      <FormControl fullWidth size="small">
+                        <InputLabel id="tag-filter-label">Filter by tag</InputLabel>
+                        <Select
+                          labelId="tag-filter-label"
+                          label="Filter by tag"
+                          value={selectedTag}
+                          onChange={(event) => setSelectedTag(event.target.value)}
+                        >
+                          <MenuItem value="">All tags</MenuItem>
+                          {allTags.map((tag) => <MenuItem key={tag} value={tag}>{tag}</MenuItem>)}
+                        </Select>
+                      </FormControl>
+                    </Grid>
+                  </Grid>
                   <Stack direction="row" spacing={2} alignItems="center" justifyContent="space-between">
                     <Typography color="text.secondary" variant="body2">
                       {filteredNotes.length} {filteredNotes.length === 1 ? 'note' : 'notes'}
                     </Typography>
                     {filter !== 'trash' && (
-                      <Button variant="contained" startIcon={<AddRounded />} onClick={createNote}>
+                      <Button variant="contained" startIcon={<AddRounded />} onClick={() => createNote('blank')}>
                         New note
                       </Button>
                     )}
@@ -416,6 +554,11 @@ function App() {
                                     {formatDate(note.updatedAt)}
                                   </Typography>
                                 </Stack>
+                                {parseTags(note.tags).length > 0 && (
+                                  <Stack direction="row" spacing={1} useFlexGap flexWrap="wrap">
+                                    {parseTags(note.tags).map((tag) => <Chip key={tag} size="small" variant="outlined" label={tag} />)}
+                                  </Stack>
+                                )}
                               </Stack>
                             </CardContent>
                           </CardActionArea>
@@ -435,6 +578,11 @@ function App() {
                               </>
                             ) : (
                               <>
+                                <Tooltip title="Duplicate note">
+                                  <IconButton aria-label="Duplicate note" onClick={() => duplicateNote(note)}>
+                                    <ContentCopyRounded />
+                                  </IconButton>
+                                </Tooltip>
                                 <Tooltip title={note.favorite ? 'Remove from favorites' : 'Add to favorites'}>
                                   <IconButton
                                     aria-label={note.favorite ? 'Remove from favorites' : 'Add to favorites'}
@@ -529,19 +677,21 @@ function App() {
                   inputProps={{ maxLength: 140 }}
                   onChange={(event) => updateNote(activeNote.id, { title: event.target.value })}
                 />
-                <FormControl fullWidth>
-                  <InputLabel id="note-category-label">Category</InputLabel>
-                  <Select
-                    labelId="note-category-label"
-                    label="Category"
-                    value={activeNote.category || 'Personal'}
-                    onChange={(event) => updateNote(activeNote.id, { category: event.target.value })}
-                  >
-                    {CATEGORIES.map((category) => (
-                      <MenuItem key={category} value={category}>{category}</MenuItem>
-                    ))}
-                  </Select>
-                </FormControl>
+                <TextField
+                  fullWidth
+                  label="Category"
+                  value={activeNote.category || ''}
+                  onChange={(event) => updateNote(activeNote.id, { category: event.target.value })}
+                  helperText="Use any category name."
+                />
+                <TextField
+                  fullWidth
+                  label="Tags"
+                  placeholder="ideas, important, project"
+                  value={Array.isArray(activeNote.tags) ? activeNote.tags.join(', ') : (activeNote.tags || '')}
+                  onChange={(event) => updateNote(activeNote.id, { tags: event.target.value })}
+                  helperText="Separate tags with commas."
+                />
                 <TextField
                   fullWidth
                   multiline
@@ -550,6 +700,9 @@ function App() {
                   value={activeNote.body}
                   onChange={(event) => updateNote(activeNote.id, { body: event.target.value })}
                 />
+                <Typography variant="caption" color="text.secondary">
+                  {wordCount} words · {characterCount} characters · About {readingMinutes} min read
+                </Typography>
                 <Typography variant="caption" color="text.secondary">
                   Last edited {formatDate(activeNote.updatedAt)}. Changes are saved automatically.
                 </Typography>
@@ -581,6 +734,7 @@ function App() {
                   )}
                 </>
               )}
+              <Button onClick={() => duplicateNote(activeNote)} startIcon={<ContentCopyRounded />}>Duplicate</Button>
               <Button variant="contained" onClick={handleCloseEditor}>Done</Button>
             </DialogActions>
           </>
