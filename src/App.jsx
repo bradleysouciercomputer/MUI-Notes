@@ -2,7 +2,6 @@ import { useEffect, useMemo, useState } from 'react';
 import {
   Alert,
   AppBar,
-  Box,
   Button,
   Card,
   CardActions,
@@ -61,7 +60,7 @@ const starterNotes = [
   {
     id: 'welcome-note',
     title: 'Welcome to MUI Notes',
-    body: 'This is your space to capture thoughts, plans, and ideas.\\n\\nCreate a note with the New note button. Your changes are saved automatically in this browser.',
+    body: 'This is your space to capture thoughts, plans, and ideas.\n\nCreate a note with the New note button. Your changes are saved automatically in this browser.',
     category: 'Personal',
     favorite: true,
     pinned: true,
@@ -73,7 +72,7 @@ const starterNotes = [
   {
     id: 'project-ideas',
     title: 'Project ideas',
-    body: 'Things to explore:\\n\\n• Keep the interface focused\\n• Make common actions easy to find\\n• Build a little time for experimentation into the week',
+    body: 'Things to explore:\n\n• Keep the interface focused\n• Make common actions easy to find\n• Build a little time for experimentation into the week',
     category: 'Ideas',
     favorite: false,
     pinned: false,
@@ -85,7 +84,7 @@ const starterNotes = [
   {
     id: 'weekly-planning',
     title: 'Weekly planning',
-    body: '1. Review the inbox\\n2. Choose three priorities\\n3. Make time for focused work\\n4. Leave some room for something unexpected',
+    body: '1. Review the inbox\n2. Choose three priorities\n3. Make time for focused work\n4. Leave some room for something unexpected',
     category: 'Work',
     favorite: false,
     pinned: false,
@@ -318,18 +317,18 @@ function App() {
       <CssBaseline />
       <AppBar position="static">
         <Toolbar>
-          <NotesRounded sx={{ mr: 2 }} />
-          <Typography variant="h6" component="h1" sx={{ flexGrow: 1 }}>
-            MUI Notes
-          </Typography>
-          <Tooltip title={mode === 'light' ? 'Switch to dark mode' : 'Switch to light mode'}>
-            <IconButton color="inherit" onClick={() => setMode((current) => current === 'light' ? 'dark' : 'light')} aria-label="Toggle theme">
-              {mode === 'light' ? <DarkModeRounded /> : <LightModeRounded />}
-            </IconButton>
-          </Tooltip>
-          <Button color="inherit" startIcon={<AddRounded />} onClick={createNote}>
-            New note
-          </Button>
+          <Stack direction="row" spacing={2} alignItems="center">
+            <NotesRounded />
+            <Typography variant="h6" component="h1">MUI Notes</Typography>
+            <Tooltip title={mode === 'light' ? 'Switch to dark mode' : 'Switch to light mode'}>
+              <IconButton color="inherit" onClick={() => setMode((current) => current === 'light' ? 'dark' : 'light')} aria-label="Toggle theme">
+                {mode === 'light' ? <DarkModeRounded /> : <LightModeRounded />}
+              </IconButton>
+            </Tooltip>
+            <Button color="inherit" startIcon={<AddRounded />} onClick={createNote}>
+              New note
+            </Button>
+          </Stack>
         </Toolbar>
       </AppBar>
 
@@ -352,10 +351,13 @@ function App() {
                 <Button variant="outlined" startIcon={<DownloadRounded />} onClick={exportNotes}>
                   Export notes
                 </Button>
-                <Button variant="outlined" component="label" startIcon={<UploadFileRounded />}>
-                  Import notes
-                  <input hidden type="file" accept="application/json,.json" onChange={importNotes} />
-                </Button>
+                <TextField
+                  type="file"
+                  label="Import notes"
+                  size="small"
+                  inputProps={{ accept: 'application/json,.json' }}
+                  onChange={importNotes}
+                />
                 <Typography variant="body2" color="text.secondary">
                   Notes are stored in this browser. Export a backup before clearing browser data.
                 </Typography>
@@ -372,11 +374,10 @@ function App() {
                     value={search}
                     onChange={(event) => setSearch(event.target.value)}
                   />
-                  <Stack direction="row" spacing={2} alignItems="center">
+                  <Stack direction="row" spacing={2} alignItems="center" justifyContent="space-between">
                     <Typography color="text.secondary" variant="body2">
                       {filteredNotes.length} {filteredNotes.length === 1 ? 'note' : 'notes'}
                     </Typography>
-                    <Box sx={{ flexGrow: 1 }} />
                     {filter !== 'trash' && (
                       <Button variant="contained" startIcon={<AddRounded />} onClick={createNote}>
                         New note
@@ -394,7 +395,7 @@ function App() {
                             <CardContent>
                               <Stack spacing={1}>
                                 <Stack direction="row" spacing={1} alignItems="center">
-                                  <Typography variant="h6" component="h3" sx={{ flexGrow: 1 }}>
+                                  <Typography variant="h6" component="h3">
                                     {note.title.trim() || 'Untitled note'}
                                   </Typography>
                                   {note.pinned && <PushPinRounded color="action" fontSize="small" />}
@@ -467,8 +468,9 @@ function App() {
                     ))}
                   </Grid>
                 ) : (
-                  <Paper variant="outlined">
-                    <Stack spacing={2} alignItems="center">
+                  <Card>
+                    <CardContent>
+                      <Stack spacing={2} alignItems="center">
                       <NotesRounded fontSize="large" color="action" />
                       <Typography variant="h6">
                         {search ? 'No matching notes' : filter === 'trash' ? 'Trash is empty' : 'No notes here yet'}
@@ -490,8 +492,9 @@ function App() {
                         </Button>
                       )}
                       {search && <Button onClick={() => setSearch('')}>Clear search</Button>}
-                    </Stack>
-                  </Paper>
+                      </Stack>
+                    </CardContent>
+                  </Card>
                 )}
               </Stack>
             </Grid>
