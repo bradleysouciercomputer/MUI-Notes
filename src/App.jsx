@@ -52,11 +52,9 @@ import NotesRounded from '@mui/icons-material/NotesRounded';
 import PushPinRounded from '@mui/icons-material/PushPinRounded';
 import PushPinOutlined from '@mui/icons-material/PushPinOutlined';
 import RestoreFromTrashRounded from '@mui/icons-material/RestoreFromTrashRounded';
-import UploadFileRounded from '@mui/icons-material/UploadFileRounded';
 
 const STORAGE_KEY = 'mui-notes-data-v1';
 const MODE_KEY = 'mui-notes-mode-v1';
-const CATEGORIES = ['Personal', 'Work', 'Ideas', 'Study', 'Journal'];
 
 const starterNotes = [
   {
@@ -138,7 +136,7 @@ function truncateText(value, maxLength = 180) {
 
 function parseTags(value) {
   const entries = Array.isArray(value) ? value : String(value || '').split(',');
-  return [...new Set(entries.map((tag) => String(tag).trim()).filter(Boolean))].slice(0, 12);
+  return [...new Set(entries.map((tag) => String(tag).trim()).filter(Boolean))];
 }
 
 function App() {
