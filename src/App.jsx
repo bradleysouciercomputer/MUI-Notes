@@ -174,9 +174,10 @@ function App() {
   }, [mode]);
 
   const activeNote = notes.find((note) => note.id === activeId) || null;
-  const wordCount = activeNote?.body.trim() ? activeNote.body.trim().split(/\\s+/).length : 0;
+  const wordCount = activeNote?.body.trim() ? activeNote.body.trim().split(/\s+/).length : 0;
   const characterCount = activeNote?.body.length ?? 0;
   const readingMinutes = Math.max(1, Math.ceil(wordCount / 200));
+  const readingTimeLabel = wordCount ? `About ${readingMinutes} min read` : 'No reading time yet';
 
   const allTags = useMemo(
     () => [...new Set(notes.flatMap((note) => parseTags(note.tags)))].sort((a, b) => a.localeCompare(b)),
@@ -227,22 +228,22 @@ function App() {
       blank: { title: '', body: '', category: 'Personal' },
       meeting: {
         title: 'Meeting notes',
-        body: 'Date:\\nAttendees:\\n\\nAgenda\\n\\nDiscussion notes\\n\\nAction items\\n- ',
+        body: 'Date:\nAttendees:\n\nAgenda\n\nDiscussion notes\n\nAction items\n- ',
         category: 'Work',
       },
       tasks: {
         title: 'To-do list',
-        body: 'Tasks\\n\\n☐ First task\\n☐ Second task\\n☐ Third task\\n\\nNotes\\n',
+        body: 'Tasks\n\n☐ First task\n☐ Second task\n☐ Third task\n\nNotes\n',
         category: 'Personal',
       },
       journal: {
         title: 'Journal entry',
-        body: 'Date:\\n\\nToday I…\\n\\nWhat went well?\\n\\nWhat I want to remember:\\n',
+        body: 'Date:\n\nToday I…\n\nWhat went well?\n\nWhat I want to remember:\n',
         category: 'Journal',
       },
       project: {
         title: 'Project plan',
-        body: 'Goal\\n\\nMilestones\\n1. \\n2. \\n3. \\n\\nResources\\n\\nNext steps\\n',
+        body: 'Goal\n\nMilestones\n1. \n2. \n3. \n\nResources\n\nNext steps\n',
         category: 'Work',
       },
     };
@@ -435,22 +436,22 @@ function App() {
                 <Typography variant="h6">Notes</Typography>
                 <Paper variant="outlined">
                   <List disablePadding>
-                    <ListItemButton selected={filter === 'all'} onClick={() => setFilter('all')}>
+                    <ListItemButton selected={filter === 'all'} onClick={() => { setFilter('all'); setSelectedTag(''); }}>
                       <ListItemIcon><AllInboxRounded /></ListItemIcon>
                       <ListItemText primary="All notes" />
                       <Chip size="small" label={counts.all} />
                     </ListItemButton>
-                    <ListItemButton selected={filter === 'favorites'} onClick={() => setFilter('favorites')}>
+                    <ListItemButton selected={filter === 'favorites'} onClick={() => { setFilter('favorites'); setSelectedTag(''); }}>
                       <ListItemIcon><FavoriteBorderRounded /></ListItemIcon>
                       <ListItemText primary="Favorites" />
                       <Chip size="small" label={counts.favorites} />
                     </ListItemButton>
-                    <ListItemButton selected={filter === 'archived'} onClick={() => setFilter('archived')}>
+                    <ListItemButton selected={filter === 'archived'} onClick={() => { setFilter('archived'); setSelectedTag(''); }}>
                       <ListItemIcon><Inventory2Outlined /></ListItemIcon>
                       <ListItemText primary="Archived" />
                       <Chip size="small" label={counts.archived} />
                     </ListItemButton>
-                    <ListItemButton selected={filter === 'trash'} onClick={() => setFilter('trash')}>
+                    <ListItemButton selected={filter === 'trash'} onClick={() => { setFilter('trash'); setSelectedTag(''); }}>
                       <ListItemIcon><DeleteOutlineRounded /></ListItemIcon>
                       <ListItemText primary="Trash" />
                       <Chip size="small" label={counts.trash} />
@@ -483,6 +484,7 @@ function App() {
                     inputRef={searchInputRef}
                     fullWidth
                     label="Search notes"
+                    helperText="Tip: press Ctrl+F (or Cmd+F on Mac) to search."
                     value={search}
                     onChange={(event) => setSearch(event.target.value)}
                   />
@@ -628,11 +630,11 @@ function App() {
                       <Stack spacing={2} alignItems="center">
                       <NotesRounded fontSize="large" color="action" />
                       <Typography variant="h6">
-                        {search ? 'No matching notes' : filter === 'trash' ? 'Trash is empty' : 'No notes here yet'}
+                        {search || selectedTag ? 'No matching notes' : filter === 'trash' ? 'Trash is empty' : 'No notes here yet'}
                       </Typography>
                       <Typography color="text.secondary" align="center">
-                        {search
-                          ? 'Try another search term.'
+                        {search || selectedTag
+                          ? 'Try another search term or clear the active tag filter.'
                           : filter === 'favorites'
                             ? 'Add a note to favorites using its heart button.'
                             : filter === 'archived'
@@ -642,11 +644,12 @@ function App() {
                                 : 'Create a note to get started.'}
                       </Typography>
                       {filter === 'all' && !search && (
-                        <Button variant="contained" startIcon={<AddRounded />} onClick={createNote}>
+                        <Button variant="contained" startIcon={<AddRounded />} onClick={() => createNote('blank')}>
                           Create note
                         </Button>
                       )}
                       {search && <Button onClick={() => setSearch('')}>Clear search</Button>}
+                      {selectedTag && <Button onClick={() => setSelectedTag('')}>Clear tag filter</Button>}
                       </Stack>
                     </CardContent>
                   </Card>
@@ -656,7 +659,7 @@ function App() {
           </Grid>
           <Divider />
           <Typography variant="body2" color="text.secondary" align="center">
-            MUI Notes · Your notes are saved locally in this browser
+            MUI Notes · Saved locally in this browser · Ctrl/Cmd + N: new note · Ctrl/Cmd + F: search
           </Typography>
         </Stack>
       </Container>
@@ -701,7 +704,7 @@ function App() {
                   onChange={(event) => updateNote(activeNote.id, { body: event.target.value })}
                 />
                 <Typography variant="caption" color="text.secondary">
-                  {wordCount} words · {characterCount} characters · About {readingMinutes} min read
+                  {wordCount} words · {characterCount} characters · {readingTimeLabel}
                 </Typography>
                 <Typography variant="caption" color="text.secondary">
                   Last edited {formatDate(activeNote.updatedAt)}. Changes are saved automatically.
