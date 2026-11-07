@@ -183,8 +183,6 @@ function App() {
   const activeTasks = Array.isArray(activeNote?.tasks) ? activeNote.tasks : [];
   const completedTaskCount = activeTasks.filter((task) => task.completed).length;
   const checklistProgress = activeTasks.length ? Math.round((completedTaskCount / activeTasks.length) * 100) : 0;
-  const visibleSelectedIds = selectedIds.filter((id) => filteredNotes.some((note) => note.id === id));
-  const allVisibleSelected = filteredNotes.length > 0 && filteredNotes.every((note) => selectedIds.includes(note.id));
   const wordCount = activeNote?.body.trim() ? activeNote.body.trim().split(/\s+/).length : 0;
   const characterCount = activeNote?.body.length ?? 0;
   const readingMinutes = Math.max(1, Math.ceil(wordCount / 200));
@@ -226,6 +224,9 @@ function App() {
         return new Date(b.updatedAt) - new Date(a.updatedAt);
       });
   }, [notes, filter, search, selectedTag, sortBy]);
+
+  const visibleSelectedIds = selectedIds.filter((id) => filteredNotes.some((note) => note.id === id));
+  const allVisibleSelected = filteredNotes.length > 0 && filteredNotes.every((note) => selectedIds.includes(note.id));
 
   const updateNote = (id, changes) => {
     setNotes((current) => current.map((note) => (
