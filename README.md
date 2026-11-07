@@ -5,17 +5,21 @@ A responsive, local-first note-taking app built with React and the official [MUI
 ## Features
 
 - Create and edit notes with automatic browser saving
-- Search note titles, body text, categories, and tags
+- Search note titles, body text, categories, tags, and checklist items
 - Add multiple comma-separated tags and filter notes by tag
 - Use custom category names
 - Sort by recently updated, recently created, oldest updated, or title
 - Create notes from blank, meeting, to-do, journal, and project templates
 - Duplicate notes
+- Interactive checklists with completion state and progress indicators
+- Multi-select notes and apply bulk favorite, archive, restore, trash, and delete actions
+- Empty the trash after confirmation
+- Export individual notes as Markdown, including tags and checklist items
 - Favorites, pinned notes, archive, trash, restore, and permanent deletion
 - Editor word count, character count, and estimated reading time
 - Keyboard shortcuts: `Ctrl/Cmd + N` for a new note and `Ctrl/Cmd + F` to focus search
 - Light and dark palette modes
-- Import and export JSON backups
+- Import and export JSON backups, including tags and checklists
 - Responsive desktop and mobile layouts
 - Local-first storage using the browser's `localStorage`
 
