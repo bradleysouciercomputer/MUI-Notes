@@ -7,6 +7,7 @@ import {
   CardActions,
   CardContent,
   CardActionArea,
+  Checkbox,
   Chip,
   Container,
   CssBaseline,
@@ -21,9 +22,11 @@ import {
   IconButton,
   InputLabel,
   List,
+  ListItem,
   ListItemButton,
   ListItemIcon,
   ListItemText,
+  LinearProgress,
   Menu,
   MenuItem,
   Paper,
@@ -43,6 +46,7 @@ import ArchiveOutlined from '@mui/icons-material/ArchiveOutlined';
 import DeleteOutlineRounded from '@mui/icons-material/DeleteOutlineRounded';
 import DownloadRounded from '@mui/icons-material/DownloadRounded';
 import ContentCopyRounded from '@mui/icons-material/ContentCopyRounded';
+import ChecklistRounded from '@mui/icons-material/ChecklistRounded';
 import FavoriteRounded from '@mui/icons-material/FavoriteRounded';
 import FavoriteBorderRounded from '@mui/icons-material/FavoriteBorderRounded';
 import LightModeRounded from '@mui/icons-material/LightModeRounded';
@@ -151,6 +155,10 @@ function App() {
   const [sortBy, setSortBy] = useState('updated');
   const [selectedTag, setSelectedTag] = useState('');
   const [templateAnchor, setTemplateAnchor] = useState(null);
+  const [selectedIds, setSelectedIds] = useState([]);
+  const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false);
+  const [emptyTrashOpen, setEmptyTrashOpen] = useState(false);
+  const [checklistDraft, setChecklistDraft] = useState('');
   const searchInputRef = useRef(null);
 
   const theme = useMemo(() => createTheme({ palette: { mode } }), [mode]);
@@ -172,6 +180,11 @@ function App() {
   }, [mode]);
 
   const activeNote = notes.find((note) => note.id === activeId) || null;
+  const activeTasks = Array.isArray(activeNote?.tasks) ? activeNote.tasks : [];
+  const completedTaskCount = activeTasks.filter((task) => task.completed).length;
+  const checklistProgress = activeTasks.length ? Math.round((completedTaskCount / activeTasks.length) * 100) : 0;
+  const visibleSelectedIds = selectedIds.filter((id) => filteredNotes.some((note) => note.id === id));
+  const allVisibleSelected = filteredNotes.length > 0 && filteredNotes.every((note) => selectedIds.includes(note.id));
   const wordCount = activeNote?.body.trim() ? activeNote.body.trim().split(/\s+/).length : 0;
   const characterCount = activeNote?.body.length ?? 0;
   const readingMinutes = Math.max(1, Math.ceil(wordCount / 200));
@@ -199,7 +212,8 @@ function App() {
         if (filter === 'all' && (note.archived || note.trashed)) return false;
         if (selectedTag && !parseTags(note.tags).includes(selectedTag)) return false;
         if (!term) return true;
-        return [note.title, note.body, note.category, ...parseTags(note.tags)]
+        const checklistText = (Array.isArray(note.tasks) ? note.tasks : []).map((task) => task.text);
+        return [note.title, note.body, note.category, ...parseTags(note.tags), ...checklistText]
           .some((value) => String(value || '').toLowerCase().includes(term));
       })
       .sort((a, b) => {
@@ -251,6 +265,13 @@ function App() {
       id: createId(),
       ...preset,
       tags: '',
+      tasks: template === 'tasks'
+        ? [
+            { id: createId(), text: 'First task', completed: false },
+            { id: createId(), text: 'Second task', completed: false },
+            { id: createId(), text: 'Third task', completed: false },
+          ]
+        : [],
       favorite: false,
       pinned: false,
       archived: false,
@@ -271,6 +292,7 @@ function App() {
     const copy = {
       ...source,
       id: createId(),
+      tasks: (Array.isArray(source.tasks) ? source.tasks : []).map((task) => ({ ...task, id: createId() })),
       title: (source.title.trim() || 'Untitled note') + ' (copy)',
       favorite: false,
       pinned: false,
@@ -311,9 +333,90 @@ function App() {
 
   const permanentlyDelete = () => {
     setNotes((current) => current.filter((note) => note.id !== deleteId));
+    setSelectedIds((current) => current.filter((id) => id !== deleteId));
     setDeleteId(null);
     setActiveId(null);
     setSnackbar('Note permanently deleted');
+  };
+
+  const toggleSelection = (id) => {
+    setSelectedIds((current) => current.includes(id)
+      ? current.filter((selectedId) => selectedId !== id)
+      : [...current, id]);
+  };
+
+  const toggleSelectAllVisible = (checked) => {
+    const visibleIds = filteredNotes.map((note) => note.id);
+    setSelectedIds((current) => checked
+      ? [...new Set([...current, ...visibleIds])]
+      : current.filter((id) => !visibleIds.includes(id)));
+  };
+
+  const applyBulkChange = (changes, message) => {
+    const targets = new Set(visibleSelectedIds);
+    setNotes((current) => current.map((note) => targets.has(note.id)
+      ? { ...note, ...changes, updatedAt: new Date().toISOString() }
+      : note));
+    setSelectedIds((current) => current.filter((id) => !targets.has(id)));
+    setSnackbar(message);
+  };
+
+  const bulkDeleteSelected = () => {
+    const targets = new Set(visibleSelectedIds);
+    setNotes((current) => current.filter((note) => !targets.has(note.id)));
+    setSelectedIds((current) => current.filter((id) => !targets.has(id)));
+    setBulkDeleteOpen(false);
+    setSnackbar('Selected notes permanently deleted');
+  };
+
+  const emptyTrash = () => {
+    setNotes((current) => current.filter((note) => !note.trashed));
+    setSelectedIds((current) => current.filter((id) => notes.some((note) => note.id === id && !note.trashed)));
+    setEmptyTrashOpen(false);
+    setSnackbar('Trash emptied');
+  };
+
+  const addChecklistTask = () => {
+    const text = checklistDraft.trim();
+    if (!activeNote || !text) return;
+    const tasks = Array.isArray(activeNote.tasks) ? activeNote.tasks : [];
+    updateNote(activeNote.id, { tasks: [...tasks, { id: createId(), text, completed: false }] });
+    setChecklistDraft('');
+  };
+
+  const updateChecklistTask = (taskId, changes) => {
+    if (!activeNote) return;
+    updateNote(activeNote.id, {
+      tasks: activeTasks.map((task) => task.id === taskId ? { ...task, ...changes } : task),
+    });
+  };
+
+  const removeChecklistTask = (taskId) => {
+    if (!activeNote) return;
+    updateNote(activeNote.id, { tasks: activeTasks.filter((task) => task.id !== taskId) });
+  };
+
+  const exportMarkdown = (note) => {
+    if (!note) return;
+    const tasks = (Array.isArray(note.tasks) ? note.tasks : [])
+      .map((task) => `- [${task.completed ? 'x' : ' '}] ${task.text}`);
+    const content = [
+      `# ${note.title.trim() || 'Untitled note'}`,
+      `Category: ${note.category || 'Personal'}`,
+      parseTags(note.tags).length ? `Tags: ${parseTags(note.tags).join(', ')}` : '',
+      '',
+      note.body || '',
+      tasks.length ? `## Checklist\n\n${tasks.join('\n')}` : '',
+    ].filter((part) => part !== '').join('\n\n');
+    const blob = new Blob([content], { type: 'text/markdown;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    const safeName = (note.title.trim() || 'note').replace(/[^a-z0-9-_]+/gi, '-').replace(/^-|-$/g, '');
+    link.href = url;
+    link.download = `${safeName || 'note'}.md`;
+    link.click();
+    URL.revokeObjectURL(url);
+    setSnackbar('Markdown note exported');
   };
 
   const exportNotes = () => {
@@ -349,6 +452,14 @@ function App() {
           body: String(item.body || ''),
           category: String(item.category || 'Personal'),
           tags: Array.isArray(item.tags) ? item.tags.join(', ') : String(item.tags || ''),
+          tasks: Array.isArray(item.tasks) ? item.tasks
+            .filter((task) => task && typeof task === 'object')
+            .map((task) => ({
+              id: typeof task.id === 'string' ? task.id : createId(),
+              text: String(task.text || ''),
+              completed: Boolean(task.completed),
+            }))
+            : [],
           favorite: Boolean(item.favorite),
           pinned: Boolean(item.pinned),
           archived: Boolean(item.archived),
@@ -360,6 +471,8 @@ function App() {
         setActiveId(null);
         setFilter('all');
         setSearch('');
+        setSelectedIds([]);
+        setSelectedTag('');
         setSnackbar('Backup imported');
       } catch {
         setSnackbar('This file is not a valid MUI Notes backup');
@@ -520,15 +633,56 @@ function App() {
                     </Grid>
                   </Grid>
                   <Stack direction="row" spacing={2} alignItems="center" justifyContent="space-between">
-                    <Typography color="text.secondary" variant="body2">
-                      {filteredNotes.length} {filteredNotes.length === 1 ? 'note' : 'notes'}
-                    </Typography>
+                    <Stack direction="row" spacing={1} alignItems="center">
+                      <Checkbox
+                        checked={allVisibleSelected}
+                        indeterminate={visibleSelectedIds.length > 0 && !allVisibleSelected}
+                        onChange={(event) => toggleSelectAllVisible(event.target.checked)}
+                        inputProps={{ 'aria-label': 'Select all visible notes' }}
+                        disabled={filteredNotes.length === 0}
+                      />
+                      <Typography color="text.secondary" variant="body2">
+                        {filteredNotes.length} {filteredNotes.length === 1 ? 'note' : 'notes'}
+                      </Typography>
+                    </Stack>
+                    {filter === 'trash' && counts.trash > 0 && (
+                      <Button color="error" onClick={() => setEmptyTrashOpen(true)}>
+                        Empty trash
+                      </Button>
+                    )}
                     {filter !== 'trash' && (
                       <Button variant="contained" startIcon={<AddRounded />} onClick={() => createNote('blank')}>
                         New note
                       </Button>
                     )}
                   </Stack>
+                  {visibleSelectedIds.length > 0 && (
+                    <Paper variant="outlined">
+                      <Stack direction="row" spacing={1} alignItems="center" useFlexGap flexWrap="wrap">
+                        <Typography variant="body2">{visibleSelectedIds.length} selected</Typography>
+                        {filter === 'trash' ? (
+                          <>
+                            <Button onClick={() => {
+                              const targets = new Set(visibleSelectedIds);
+                              setNotes((current) => current.map((note) => targets.has(note.id) ? { ...note, trashed: false, updatedAt: new Date().toISOString() } : note));
+                              setSelectedIds((current) => current.filter((id) => !targets.has(id)));
+                              setSnackbar('Selected notes restored');
+                            }}>Restore</Button>
+                            <Button color="error" onClick={() => setBulkDeleteOpen(true)}>Delete forever</Button>
+                          </>
+                        ) : (
+                          <>
+                            <Button onClick={() => applyBulkChange({ favorite: true }, 'Selected notes added to favorites')}>Add to favorites</Button>
+                            {filter === 'archived'
+                              ? <Button onClick={() => applyBulkChange({ archived: false }, 'Selected notes unarchived')}>Unarchive</Button>
+                              : <Button onClick={() => applyBulkChange({ archived: true }, 'Selected notes archived')}>Archive</Button>}
+                            <Button color="error" onClick={() => applyBulkChange({ trashed: true, archived: false }, 'Selected notes moved to trash')}>Move to trash</Button>
+                          </>
+                        )}
+                        <Button color="inherit" onClick={() => setSelectedIds([])}>Clear selection</Button>
+                      </Stack>
+                    </Paper>
+                  )}
                 </Stack>
 
                 {filteredNotes.length > 0 ? (
@@ -559,10 +713,23 @@ function App() {
                                     {parseTags(note.tags).map((tag) => <Chip key={tag} size="small" variant="outlined" label={tag} />)}
                                   </Stack>
                                 )}
+                                {Array.isArray(note.tasks) && note.tasks.length > 0 && (
+                                  <Chip
+                                    size="small"
+                                    icon={<ChecklistRounded />}
+                                    label={`${note.tasks.filter((task) => task.completed).length}/${note.tasks.length} checklist items`}
+                                  />
+                                )}
                               </Stack>
                             </CardContent>
                           </CardActionArea>
                           <CardActions>
+                            <Checkbox
+                              checked={selectedIds.includes(note.id)}
+                              onChange={() => toggleSelection(note.id)}
+                              onClick={(event) => event.stopPropagation()}
+                              inputProps={{ 'aria-label': `Select ${note.title || 'untitled note'}` }}
+                            />
                             {filter === 'trash' ? (
                               <>
                                 <Tooltip title="Restore note">
@@ -701,6 +868,58 @@ function App() {
                   value={activeNote.body}
                   onChange={(event) => updateNote(activeNote.id, { body: event.target.value })}
                 />
+                <Divider />
+                <Stack direction="row" spacing={1} alignItems="center">
+                  <ChecklistRounded />
+                  <Typography variant="h6">Checklist</Typography>
+                  <Chip size="small" label={`${completedTaskCount}/${activeTasks.length} completed`} />
+                </Stack>
+                {activeTasks.length > 0 && (
+                  <>
+                    <LinearProgress variant="determinate" value={checklistProgress} />
+                    <List>
+                      {activeTasks.map((task) => (
+                        <ListItem
+                          key={task.id}
+                          secondaryAction={
+                            <IconButton edge="end" aria-label={`Remove ${task.text}`} onClick={() => removeChecklistTask(task.id)}>
+                              <DeleteOutlineRounded />
+                            </IconButton>
+                          }
+                        >
+                          <Checkbox
+                            edge="start"
+                            checked={Boolean(task.completed)}
+                            onChange={(event) => updateChecklistTask(task.id, { completed: event.target.checked })}
+                            inputProps={{ 'aria-label': task.text }}
+                          />
+                          <ListItemText
+                            primary={task.text}
+                            secondary={task.completed ? 'Completed' : 'Not completed'}
+                          />
+                        </ListItem>
+                      ))}
+                    </List>
+                  </>
+                )}
+                <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1}>
+                  <TextField
+                    fullWidth
+                    size="small"
+                    label="Add checklist item"
+                    value={checklistDraft}
+                    onChange={(event) => setChecklistDraft(event.target.value)}
+                    onKeyDown={(event) => {
+                      if (event.key === 'Enter') {
+                        event.preventDefault();
+                        addChecklistTask();
+                      }
+                    }}
+                  />
+                  <Button variant="outlined" onClick={addChecklistTask} disabled={!checklistDraft.trim()}>
+                    Add item
+                  </Button>
+                </Stack>
                 <Typography variant="caption" color="text.secondary">
                   {wordCount} words · {characterCount} characters · {readingTimeLabel}
                 </Typography>
@@ -735,6 +954,7 @@ function App() {
                   )}
                 </>
               )}
+              <Button onClick={() => exportMarkdown(activeNote)} startIcon={<DownloadRounded />}>Export .md</Button>
               <Button onClick={() => duplicateNote(activeNote)} startIcon={<ContentCopyRounded />}>Duplicate</Button>
               <Button variant="contained" onClick={handleCloseEditor}>Done</Button>
             </DialogActions>
@@ -752,6 +972,32 @@ function App() {
         <DialogActions>
           <Button onClick={() => setDeleteId(null)}>Cancel</Button>
           <Button color="error" variant="contained" onClick={permanentlyDelete}>Delete forever</Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog open={bulkDeleteOpen} onClose={() => setBulkDeleteOpen(false)}>
+        <DialogTitle>Delete selected notes permanently?</DialogTitle>
+        <DialogContent>
+          <DialogContentText>
+            {visibleSelectedIds.length} selected notes will be permanently deleted. This cannot be undone.
+          </DialogContentText>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setBulkDeleteOpen(false)}>Cancel</Button>
+          <Button color="error" variant="contained" onClick={bulkDeleteSelected}>Delete forever</Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog open={emptyTrashOpen} onClose={() => setEmptyTrashOpen(false)}>
+        <DialogTitle>Empty trash?</DialogTitle>
+        <DialogContent>
+          <DialogContentText>
+            This permanently deletes all {counts.trash} notes in the trash. This cannot be undone.
+          </DialogContentText>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setEmptyTrashOpen(false)}>Cancel</Button>
+          <Button color="error" variant="contained" onClick={emptyTrash}>Empty trash</Button>
         </DialogActions>
       </Dialog>
 
