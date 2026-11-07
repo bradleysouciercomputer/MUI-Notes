@@ -493,6 +493,10 @@ function App() {
   const handleCloseEditor = () => setActiveId(null);
 
   useEffect(() => {
+    setChecklistDraft('');
+  }, [activeId]);
+
+  useEffect(() => {
     const handleShortcut = (event) => {
       if (!(event.ctrlKey || event.metaKey) || event.altKey) return;
       const key = event.key.toLowerCase();
